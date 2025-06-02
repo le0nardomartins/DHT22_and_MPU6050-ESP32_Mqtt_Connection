@@ -1,7 +1,7 @@
 # DHT22 and MPU6050 - ESP32 Mqtt Connection
 
 
-# Funcionamento do MPU6050 no Sistema de Detecção de Vibração
+## Funcionamento do MPU6050 no Sistema de Detecção de Vibração
 
 Este documento explica como o sensor **MPU6050** funciona no código de detecção de vibração apresentado.
 

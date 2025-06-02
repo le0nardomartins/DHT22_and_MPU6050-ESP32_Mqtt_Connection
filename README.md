@@ -1,181 +1,204 @@
-# DHT22 and MPU6050 - ESP32 Mqtt Connection
+# Sistema de Monitoramento IoT com ESP32, MQTT e Flask
 
+Este projeto implementa um sistema de monitoramento IoT que utiliza sensores DHT22 (temperatura e umidade) e MPU6050 (acelerômetro/vibração) conectados a um ESP32, com comunicação MQTT e uma interface web interativa.
 
-## Funcionamento do MPU6050 no Sistema de Detecção de Vibração
+## Estrutura do Projeto
 
-Este documento explica como o sensor **MPU6050** funciona no código de detecção de vibração apresentado.
+- `main.py`: Arquivo principal para iniciar todos os componentes do sistema
+- `src/esp32_simulator.py`: Simulador do ESP32 que envia dados reais via MQTT
+- `src/interface/`: Aplicação web Flask para visualização dos dados
+  - `app.py`: Servidor Flask com integração MQTT
+  - `templates/`: Templates HTML
+  - `static/`: Arquivos CSS e JavaScript
 
-## O que é o MPU6050
+## Arquitetura do Sistema
 
-O MPU6050 é um sensor inercial muito popular que combina acelerômetro e giroscópio em um único chip. Vou explicar como funciona especificamente neste projeto:
+O sistema utiliza o padrão publish/subscribe via MQTT:
 
-### Características do Sensor
-- **Sensor de movimento de 6 eixos (6-DOF)**
-- **Aceleração** nos eixos X, Y e Z
-- **Velocidade angular** (giroscópio) nos eixos X, Y e Z
+1. O dispositivo ESP32 (simulado) publica dados dos sensores nos tópicos MQTT
+2. A interface web se inscreve nesses tópicos para receber os dados em tempo real
+3. Os usuários podem enviar comandos através da interface que são publicados em um tópico de comandos
+4. O ESP32 recebe e processa esses comandos
 
-> **Nota**: Neste código, apenas o **acelerômetro** está sendo utilizado para detectar vibrações.
+## Configuração do MQTT
 
-## Funcionamento no Código
+- **Broker**: broker.hivemq.com
+- **Porta**: 1883
+- **Tópicos**:
+  - `sensor/vibration`: Dados de vibração do MPU6050
+  - `sensor/temperature`: Dados de temperatura do DHT22
+  - `sensor/humidity`: Dados de umidade do DHT22
+  - `sensor/status`: Status do dispositivo (online/offline)
+  - `sensor/commands`: Comandos para o dispositivo
 
-### 1. Inicialização
+## Instalação de Dependências
 
-```cpp
-#define MPU6050_ADDR 0x68  // Endereço I2C padrão
-Wire.begin(SDA_PIN, SCL_PIN);  // Inicializa comunicação I2C
+Instale todas as dependências necessárias com:
+
+```bash
+pip install -r requirements.txt
 ```
 
-- **Endereço I2C**: 0x68 (padrão do MPU6050)
-- **Comunicação**: Via protocolo I2C
-- **Pinos utilizados**: SDA (GPIO 18) e SCL (GPIO 19)
+**Nota**: Este projeto utiliza paho-mqtt 2.2.1+, que introduziu uma nova API de callbacks. O código foi adaptado para essa versão.
 
-### 2. Configuração do Sensor
+## Executando o Projeto
 
-```cpp
-writeRegister(PWR_MGMT_1, 0x00);  // Acorda o MPU6050 (sai do modo sleep)
-writeRegister(ACCEL_CONFIG, 0x08); // Configura para ±4g de sensibilidade
+### Método 1: Executar tudo de uma vez (Recomendado)
+
+Execute o arquivo principal que iniciará todos os componentes:
+
+```bash
+python main.py
 ```
 
-**Configurações aplicadas:**
-- Sair do modo sleep (sensor ativo)
-- Configurar acelerômetro para range ±4g
-- Estabelecer comunicação estável
+Isso iniciará tanto o simulador ESP32 quanto a interface web. A aplicação será acessível em: http://localhost:5000
 
-### 3. Leitura dos Dados
+Para encerrar o sistema, pressione Ctrl+C no terminal.
 
-```cpp
-void readAccelData() {
-  Wire.beginTransmission(MPU6050_ADDR);
-  Wire.write(ACCEL_XOUT_H);  // Registrador inicial dos dados do acelerômetro
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU6050_ADDR, 6, true);  // Solicita 6 bytes (2 por eixo)
-  
-  // Lê os dados brutos (16 bits por eixo)
-  ax = Wire.read() << 8 | Wire.read();  // X
-  ay = Wire.read() << 8 | Wire.read();  // Y  
-  az = Wire.read() << 8 | Wire.read();  // Z
-  
-  // Converte para unidades de g (gravidade)
-  accelX = ax / 8192.0;  // Para range ±4g
-  accelY = ay / 8192.0;
-  accelZ = az / 8192.0;
-}
+### Método 2: Executar componentes separadamente
+
+Se preferir, você pode executar cada componente separadamente.
+
+#### Simulador ESP32
+
+```bash
+python src/esp32_simulator.py
 ```
 
-**Processo de leitura:**
-1. Solicita dados do registrador ACCEL_XOUT_H
-2. Lê 6 bytes consecutivos (2 bytes por eixo)
-3. Combina os bytes para formar valores de 16 bits
-4. Converte para unidades de aceleração (g)
+#### Interface Web
 
-### 4. Detecção de Vibração
-
-O algoritmo calcula a **magnitude** do vetor aceleração:
-
-```cpp
-magnitude = sqrt(accelX² + accelY² + accelZ²)
+```bash
+python src/interface/app.py
 ```
 
-**Princípio de funcionamento:**
-- Em repouso: magnitude ≈ 1g (devido à gravidade terrestre)
-- Com vibração: magnitude varia significativamente
-- Desvio da linha base indica presença de vibração
+Acesse a interface em: http://localhost:5000
 
-### 5. Calibração
+## Funcionalidades
 
-```cpp
-void calibrateSensor() {
-  // Faz várias leituras em repouso
-  // Calcula a média para estabelecer a linha base
-  baselineMagnitude = sumMagnitude / validSamples;
-}
+- **Monitoramento em tempo real**: Visualização dos dados de temperatura, umidade e vibração em gráficos atualizados a cada 3 segundos
+- **Controle remoto**: Envio de comandos para o dispositivo (reset, calibração, verificação de status)
+- **Status do dispositivo**: Indicação visual do estado de conexão do dispositivo
+- **Simulação de anomalias**: O simulador pode gerar anomalias nos valores dos sensores para testar o sistema
+
+## Simulador ESP32
+
+O simulador emula um ESP32 com os seguintes sensores:
+- DHT22: Temperatura e umidade
+- MPU6050: Acelerômetro (vibração)
+
+Funcionalidades do simulador:
+- Gera dados realistas com variações suaves
+- Responde a comandos como um dispositivo real
+- Simula eventos como calibração e reset
+- Pode gerar anomalias para testar o sistema de alertas
+
+## Comandos disponíveis
+
+A interface permite enviar os seguintes comandos:
+- **Reiniciar Dispositivo**: Simula um reset do ESP32
+- **Calibrar Sensores**: Simula uma calibração dos sensores
+- **Verificar Status**: Solicita o status atual do dispositivo
+
+## Requisitos
+
+- Python 3.6+
+- Flask
+- Paho-MQTT 2.2.1+
+- Chart.js (incluído via CDN)
+- Bootstrap 5 (incluído via CDN)
+
+## Características
+
+- 📊 Visualização em tempo real dos dados dos sensores
+- 🔔 Sistema de alertas para eventos extremos
+- 📈 Gráficos históricos para temperatura, umidade e vibração
+- 📱 Interface responsiva para desktop e mobile
+
+## Tópicos MQTT
+
+O sistema está configurado para receber dados dos seguintes tópicos MQTT:
+
+- `sensor/temperature` - Temperatura em °C (formato: valor numérico)
+- `sensor/humidity` - Umidade em % (formato: valor numérico)
+- `sensor/vibration` - Dados de vibração (formato: JSON)
+- `sensor/status` - Status do sistema (formato: JSON)
+- `sensor/commands` - Canal para envio de comandos
+
+## Sistema de Alertas Preventivos
+
+O dashboard possui um sistema avançado de alertas que monitora continuamente os valores dos sensores e alerta preventivamente sobre:
+
+- 🌡️ Temperaturas anormalmente altas ou baixas
+- 💧 Níveis de umidade excessivos
+- 📳 Vibrações que podem indicar falhas no equipamento
+
+Os alertas são classificados em três níveis de severidade:
+- **Atenção** - Valores acima do normal
+- **Perigo** - Valores elevados que requerem intervenção
+- **Crítico** - Valores extremos que podem causar danos imediatos
+
+## Instalação e Execução
+
+1. Clone o repositório:
+```bash
+git clone https://github.com/seu-usuario/mqtt-dashboard.git
+cd mqtt-dashboard
 ```
 
-**Processo de calibração:**
-- Realiza 50 leituras com o sensor em repouso
-- Calcula a média das magnitudes
-- Define a linha base para comparação futura
-- Melhora a precisão da detecção
-
-### 6. Classificação da Vibração
-
-```cpp
-float vibrationLevel = abs(magnitude - baselineMagnitude);
-
-if (vibrationLevel > vibrationThreshold) {
-  // Classifica como: LEVE, MODERADA, FORTE ou INTENSA
-  // baseado no nível de desvio da linha base
-}
+2. Instale as dependências:
+```bash
+npm install
 ```
 
-**Níveis de classificação:**
-- 🟢 **LEVE**: < 0.5g
-- 🟡 **MODERADA**: 0.5g - 1.0g  
-- 🟠 **FORTE**: 1.0g - 2.0g
-- 🔴 **INTENSA**: > 2.0g
-
-## Características Técnicas Utilizadas
-
-| Parâmetro | Valor |
-|-----------|--------|
-| **Comunicação** | I2C (SDA/SCL) |
-| **Resolução** | 16 bits por eixo |
-| **Faixa configurada** | ±4g |
-| **Taxa de amostragem** | 20Hz (a cada 50ms) |
-| **Sensibilidade** | 8.192 LSB/g |
-| **Endereço I2C** | 0x68 |
-
-## Registradores Utilizados
-
-| Registrador | Endereço | Função |
-|-------------|----------|---------|
-| **PWR_MGMT_1** | 0x6B | Gerenciamento de energia |
-| **ACCEL_XOUT_H** | 0x3B | Dados do acelerômetro (início) |
-| **ACCEL_CONFIG** | 0x1C | Configuração do acelerômetro |
-
-## Vantagens do MPU6050
-
-### ✅ Pontos Positivos
-- **Baixo custo** e fácil integração
-- **Baixo consumo** de energia
-- **Alta precisão** para aplicações de detecção de movimento
-- **Interface I2C simples**
-- **Calibração automática** possível
-- **Versatilidade** para diversas aplicações
-
-### 🎯 Aplicações Ideais
-- Detecção de vibrações em máquinas
-- Monitoramento de estruturas
-- Sistemas de alarme por movimento
-- Análise de estabilidade
-- Controle de qualidade industrial
-
-## Fluxo de Funcionamento
-
-```mermaid
-graph TD
-    A[Inicialização do MPU6050] --> B[Configuração ±4g]
-    B --> C[Calibração - 50 amostras]
-    C --> D[Leitura contínua - 20Hz]
-    D --> E[Cálculo da magnitude]
-    E --> F[Comparação com linha base]
-    F --> G{Vibração detectada?}
-    G -->|Sim| H[Classificar intensidade]
-    G -->|Não| D
-    H --> I[Exibir resultado]
-    I --> D
+3. Execute em modo de desenvolvimento:
+```bash
+npm start
 ```
 
-## Comandos de Controle
+4. Para build de produção:
+```bash
+npm run build
+```
 
-O sistema oferece comandos via Serial para interação:
+## Deploy na Vercel
 
-- `threshold:X.X` - Ajustar limiar de detecção
-- `calibrate` - Recalibrar o sensor
-- `reset` - Resetar estatísticas
-- `test` - Testar funcionamento dos sensores
-- `help` - Exibir lista de comandos
+Este projeto está configurado para deploy na Vercel. Para fazer o deploy:
 
----
+1. Instale a CLI da Vercel (opcional):
+```bash
+npm install -g vercel
+```
 
-Este sistema é ideal para aplicações que requerem monitoramento contínuo de vibração com alta precisão e baixo custo.
+2. Deploy via CLI:
+```bash
+vercel
+```
+
+Ou simplesmente conecte seu repositório GitHub ao Vercel e configure o deploy automático.
+
+O arquivo `vercel.json` já está configurado com todas as configurações necessárias, incluindo as regras de segurança para conexões WebSocket.
+
+## Configuração MQTT
+
+O dashboard está pré-configurado para conectar automaticamente ao broker HiveMQ:
+
+- **Host**: broker.hivemq.com
+- **Porta**: 8000 (WebSocket)
+- **Tópicos**:
+  - `sensor/temperature` - Temperatura em °C
+  - `sensor/humidity` - Umidade em %
+  - `sensor/vibration` - Dados de vibração (JSON)
+  - `sensor/status` - Status do sistema (JSON)
+  - `sensor/commands` - Canal para envio de comandos
+
+**Nota para ESP32**: Configure o dispositivo para usar o mesmo broker (broker.hivemq.com) na porta 1883 (porta MQTT padrão para dispositivos).
+
+## Hardware Compatível
+
+Este dashboard foi projetado para ser usado com o ESP32 equipado com:
+- Sensor DHT22 para temperatura e umidade
+- Sensor MPU6050 para medição de vibração
+
+## Licença
+
+MIT

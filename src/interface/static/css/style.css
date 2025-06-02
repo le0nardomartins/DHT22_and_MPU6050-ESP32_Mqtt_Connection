@@ -1,0 +1,67 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar {
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    border: none;
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.card-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    font-weight: 600;
+    padding: 15px 20px;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+h3 {
+    font-weight: 700;
+}
+
+.btn {
+    padding: 10px 20px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.9rem;
+    border-radius: 5px;
+}
+
+.badge {
+    padding: 8px 12px;
+    font-weight: 500;
+    border-radius: 4px;
+}
+
+#status-badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+#status-badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+#status-badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+canvas {
+    width: 100% !important;
+    height: 200px !important;
+} 

@@ -13,11 +13,11 @@ MQTT_PORT = 1883
 CLIENT_ID = f"python-mqtt-client-{random.randint(0, 1000)}"
 
 # Tópicos
-TOPIC_VIBRATION = "sensor/vibration"
-TOPIC_TEMPERATURE = "sensor/temperature" 
-TOPIC_HUMIDITY = "sensor/humidity"
-TOPIC_STATUS = "sensor/status"
-TOPIC_COMMANDS = "sensor/commands"
+TOPIC_VIBRATION = "sensorGS2025FIAPLEOOO_XYZ_0987654321/vibration"
+TOPIC_TEMPERATURE = "sensorGS2025FIAPLEOOO_XYZ_0987654321/temperature" 
+TOPIC_HUMIDITY = "sensorGS2025FIAPLEOOO_XYZ_0987654321/humidity"
+TOPIC_STATUS = "sensorGS2025FIAPLEOOO_XYZ_0987654321/status"
+TOPIC_COMMANDS = "sensorGS2025FIAPLEOOO_XYZ_0987654321/commands"
 
 # Armazenamento de dados recebidos
 latest_data = {
@@ -122,7 +122,7 @@ def main():
         client.connect(MQTT_BROKER, MQTT_PORT, 60)
         
         # Iniciar loop MQTT em modo de bloqueio
-        logging.warning("Iniciando loop MQTT para receber dados reais dos sensores...")
+        logging.warning("Iniciando loop MQTT para receber dados dos sensores...")
         client.loop_forever()
             
     except KeyboardInterrupt:

@@ -37,7 +37,7 @@ def main():
         print("\n" + "="*60)
         print("   Sistema de Monitoramento IoT iniciado com sucesso!")
         print("   Interface web disponível em: http://localhost:5000")
-        print("   Recebendo dados reais dos sensores via MQTT")
+        print("   Recebendo dados dos sensores via MQTT")
         print("   Pressione Ctrl+C para encerrar o sistema")
         print("="*60 + "\n")
         

@@ -64,4 +64,54 @@ h3 {
 canvas {
     width: 100% !important;
     height: 200px !important;
+}
+
+/* Estilos para valores críticos */
+.text-danger {
+    color: #dc3545 !important;
+    font-weight: bold;
+    animation: pulse 1.5s infinite;
+}
+
+.text-warning {
+    color: #ffc107 !important;
+    font-weight: bold;
+}
+
+/* Animação de pulsação para alertas críticos */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Estilos para alertas */
+#alerts-container {
+    transition: all 0.3s ease;
+}
+
+.alert {
+    margin-bottom: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    border-left: 5px solid;
+}
+
+.alert-danger {
+    border-left-color: #dc3545;
+}
+
+.alert-warning {
+    border-left-color: #ffc107;
+}
+
+.alert i {
+    margin-right: 8px;
 } 

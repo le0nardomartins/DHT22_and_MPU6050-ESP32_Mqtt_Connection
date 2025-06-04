@@ -26,6 +26,40 @@ const chartOptions = {
     }
 };
 
+// Configuração específica para o gráfico de temperatura
+const temperatureChartOptions = {
+    ...chartOptions,
+    scales: {
+        ...chartOptions.scales,
+        y: {
+            ...chartOptions.scales.y,
+            beginAtZero: false,
+            min: 10,
+            max: 50,
+            ticks: {
+                stepSize: 10
+            }
+        }
+    }
+};
+
+// Configuração específica para o gráfico de umidade
+const humidityChartOptions = {
+    ...chartOptions,
+    scales: {
+        ...chartOptions.scales,
+        y: {
+            ...chartOptions.scales.y,
+            beginAtZero: false,
+            min: 10,
+            max: 100,
+            ticks: {
+                stepSize: 10
+            }
+        }
+    }
+};
+
 // Configuração específica para o gráfico de vibração
 const vibrationChartOptions = {
     ...chartOptions,
@@ -60,7 +94,7 @@ const temperatureChart = new Chart(temperatureCtx, {
             fill: true
         }]
     },
-    options: chartOptions
+    options: temperatureChartOptions
 });
 
 const humidityCtx = document.getElementById('humidity-chart').getContext('2d');
@@ -80,7 +114,7 @@ const humidityChart = new Chart(humidityCtx, {
             fill: true
         }]
     },
-    options: chartOptions
+    options: humidityChartOptions
 });
 
 const vibrationCtx = document.getElementById('vibration-chart').getContext('2d');
@@ -218,11 +252,11 @@ function updateCharts(data) {
     
     // Atualizar temperatura
     if (data.temperature && data.temperature.length > 0) {
+        // Atualização completa do gráfico para garantir todos os pontos de dados
         const labels = data.temperature.map(item => item.time);
-        const values = data.temperature.map(item => {
-            return extractSensorValue(item);
-        });
+        const values = data.temperature.map(item => item.value);
         
+        // Garantir que todos os pontos de dados estão sendo exibidos
         temperatureChart.data.labels = labels;
         temperatureChart.data.datasets[0].data = values;
         temperatureChart.update();
@@ -243,11 +277,11 @@ function updateCharts(data) {
     
     // Atualizar umidade
     if (data.humidity && data.humidity.length > 0) {
+        // Atualização completa do gráfico para garantir todos os pontos de dados
         const labels = data.humidity.map(item => item.time);
-        const values = data.humidity.map(item => {
-            return extractSensorValue(item);
-        });
+        const values = data.humidity.map(item => item.value);
         
+        // Garantir que todos os pontos de dados estão sendo exibidos
         humidityChart.data.labels = labels;
         humidityChart.data.datasets[0].data = values;
         humidityChart.update();
@@ -288,7 +322,7 @@ function updateCharts(data) {
     }
 }
 
-// Função para buscar dados do servidor
+// Função para buscar dados do servidor (mantida para compatibilidade inicial)
 function fetchData() {
     fetch('/api/data')
         .then(response => response.json())
@@ -300,13 +334,29 @@ function fetchData() {
         });
 }
 
-// Buscar dados iniciais e configurar atualização periódica
+// Inicialização do Socket.IO e configuração dos eventos
 document.addEventListener('DOMContentLoaded', () => {
-    // Buscar dados imediatamente
-    fetchData();
+    // Inicializar conexão WebSocket usando Socket.IO
+    const socket = io();
     
-    // Configurar atualização a cada 5 segundos
-    setInterval(fetchData, 5000);
+    // Evento disparado quando há atualização de dados
+    socket.on('data_update', (data) => {
+        updateCharts(data);
+    });
+    
+    // Evento de conexão estabelecida
+    socket.on('connect', () => {
+        console.log('Conexão WebSocket estabelecida');
+    });
+    
+    // Evento de desconexão
+    socket.on('disconnect', () => {
+        console.log('Conexão WebSocket perdida');
+        // Tentar reconectar automaticamente (implementado pelo Socket.IO)
+    });
+    
+    // Buscar dados iniciais como fallback
+    fetchData();
     
     // Adicionar link para ícones Bootstrap
     const iconLink = document.createElement('link');

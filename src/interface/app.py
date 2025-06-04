@@ -1,16 +1,19 @@
 import flask
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import paho.mqtt.client as mqtt
 import json
 import threading
 import time
 import random
 import logging
+from flask_socketio import SocketIO
+import math
 
 # Configuração de logs - reduzindo nível para WARNING para remover mensagens de debug
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Dados em memória
 sensor_data = {
@@ -35,9 +38,9 @@ TOPIC_HUMIDITY = "sensorGS2025FIAPLEOOO_XYZ_0987654321/humidity"
 TOPIC_STATUS = "sensorGS2025FIAPLEOOO_XYZ_0987654321/status"
 
 # Limite de pontos nos gráficos
-MAX_DATA_POINTS = 10
+MAX_DATA_POINTS = 60
 # Tempo máximo sem dados para considerar offline (segundos)
-OFFLINE_THRESHOLD = 30
+OFFLINE_THRESHOLD = 15
 
 # Limites para alertas
 TEMPERATURE_MAX = 50.0  # Temperatura máxima em °C
@@ -47,6 +50,35 @@ VIBRATION_THRESHOLD = 4.0  # Valor de magnitude considerado alto (antes do remap
 # Valor máximo de magnitude do sensor (para remapeamento)
 VIBRATION_MAX_SENSOR = 3.464102
 VIBRATION_MAX_SCALE = 9.0  # Escala máxima desejada
+
+# Função para adicionar dados ao histórico com verificação de duplicatas
+def add_data_to_history(sensor_type, value, time_str):
+    # Verificar se temos uma lista válida para este tipo de sensor
+    if sensor_type not in sensor_data or not isinstance(sensor_data[sensor_type], list):
+        logging.error(f"Tipo de sensor inválido ou lista não inicializada: {sensor_type}")
+        return
+    
+    # Validar o valor
+    if not isinstance(value, (int, float)) or math.isnan(value):
+        logging.error(f"Valor inválido para adicionar ao histórico: {value}")
+        return
+    
+    # Verificar se já temos dados para este timestamp específico para evitar duplicatas
+    for item in sensor_data[sensor_type]:
+        if item["time"] == time_str:
+            # Atualizar o valor existente em vez de adicionar um novo
+            item["value"] = value
+            socketio.emit('data_update', sensor_data)
+            return
+            
+    # Se não existir, adicionar novo ponto
+    if len(sensor_data[sensor_type]) >= MAX_DATA_POINTS:
+        sensor_data[sensor_type].pop(0)  # Remover o ponto mais antigo
+        
+    sensor_data[sensor_type].append({"time": time_str, "value": value})
+    
+    # Garantir que estamos sempre enviando atualizações via WebSocket
+    socketio.emit('data_update', sensor_data)
 
 # Callbacks MQTT
 def on_connect(client, userdata, flags, rc):
@@ -95,6 +127,9 @@ def on_message(client, userdata, msg):
         
         # Verificar se é necessário gerar alertas
         check_alerts()
+        
+        # Enviar dados atualizados via WebSocket
+        socketio.emit('data_update', sensor_data)
     
     except Exception as e:
         logging.error(f"Erro ao processar mensagem do tópico {topic}: {str(e)}")
@@ -167,31 +202,36 @@ def process_temperature_data(payload, current_time):
         # Detectar formato do JSON e extrair valor
         if isinstance(data, dict):
             if "temperature" in data:
-                value = data["temperature"]
+                value = float(data["temperature"])
             else:
                 # Usar o primeiro campo numérico encontrado
                 for key, val in data.items():
                     if isinstance(val, (int, float)) and key != "timestamp":
-                        value = val
+                        value = float(val)
                         break
                 else:
-                    value = 0.0
+                    logging.error("Não foi possível encontrar valor de temperatura válido no payload")
+                    return
         else:
             value = float(data)
             
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as e:
         # Se não for JSON, tentar como float ou string
         try:
             value = float(payload.decode().strip())
         except ValueError:
-            value = 0.0
+            logging.error(f"Erro ao processar dados de temperatura: {str(e)}")
+            return
     
-    # Adicionar dados ao histórico
-    if len(sensor_data["temperature"]) >= MAX_DATA_POINTS:
-        sensor_data["temperature"].pop(0)
-        
-    sensor_data["temperature"].append({"time": current_time, "value": value})
-    logging.warning(f"Dado de temperatura processado: {value}")
+    # Validar valor
+    if not isinstance(value, (int, float)) or math.isnan(value):
+        logging.error(f"Valor de temperatura inválido: {value}")
+        return
+    
+    # Adicionar dados ao histórico usando a função de verificação de duplicatas
+    add_data_to_history("temperature", value, current_time)
+    
+    logging.warning(f"Dado de temperatura recebido: {value}°C (Total: {len(sensor_data['temperature'])} pontos)")
 
 # Função para processar dados de umidade
 def process_humidity_data(payload, current_time):
@@ -203,31 +243,36 @@ def process_humidity_data(payload, current_time):
         # Detectar formato do JSON e extrair valor
         if isinstance(data, dict):
             if "humidity" in data:
-                value = data["humidity"]
+                value = float(data["humidity"])
             else:
                 # Usar o primeiro campo numérico encontrado
                 for key, val in data.items():
                     if isinstance(val, (int, float)) and key != "timestamp":
-                        value = val
+                        value = float(val)
                         break
                 else:
-                    value = 0.0
+                    logging.error("Não foi possível encontrar valor de umidade válido no payload")
+                    return
         else:
             value = float(data)
             
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as e:
         # Se não for JSON, tentar como float ou string
         try:
             value = float(payload.decode().strip())
         except ValueError:
-            value = 0.0
+            logging.error(f"Erro ao processar dados de umidade: {str(e)}")
+            return
     
-    # Adicionar dados ao histórico
-    if len(sensor_data["humidity"]) >= MAX_DATA_POINTS:
-        sensor_data["humidity"].pop(0)
-        
-    sensor_data["humidity"].append({"time": current_time, "value": value})
-    logging.warning(f"Dado de umidade processado: {value}")
+    # Validar valor
+    if not isinstance(value, (int, float)) or math.isnan(value):
+        logging.error(f"Valor de umidade inválido: {value}")
+        return
+    
+    # Adicionar dados ao histórico usando a função de verificação de duplicatas
+    add_data_to_history("humidity", value, current_time)
+    
+    logging.warning(f"Dado de umidade recebido: {value}% (Total: {len(sensor_data['humidity'])} pontos)")
 
 # Função para processar dados de status
 def process_status_data(payload):
@@ -315,6 +360,8 @@ def check_online_status():
         if last_received > 0 and (current_time - last_received) > OFFLINE_THRESHOLD and sensor_data["status"] != "offline":
             sensor_data["status"] = "offline"
             logging.warning(f"Status atualizado para 'offline' - sem dados há {int(current_time - last_received)} segundos")
+            # Enviar atualização via WebSocket
+            socketio.emit('data_update', sensor_data)
         
         time.sleep(5)  # Verificar a cada 5 segundos
 
@@ -332,6 +379,56 @@ def index():
 @app.route('/api/data')
 def get_data():
     return jsonify(sensor_data)
+
+# Rota para enviar dados de teste (apenas para fins de depuração durante desenvolvimento)
+@app.route('/api/test/send')
+def send_test_data():
+    # Simular recebimento de dados de temperatura
+    topic = TOPIC_TEMPERATURE
+    temperature = request.args.get('temp', None)
+    
+    if temperature:
+        temperature = float(temperature)
+    else:
+        temperature = 25.0 + (random.random() * 15)
+        
+    # Criar payload
+    payload = json.dumps({"temperature": temperature}).encode()
+    
+    # Processar como se fosse um evento MQTT
+    current_time = time.strftime("%H:%M:%S")
+    process_temperature_data(payload, current_time)
+    
+    # Simular recebimento de dados de umidade
+    topic = TOPIC_HUMIDITY
+    humidity = request.args.get('hum', None)
+    
+    if humidity:
+        humidity = float(humidity)
+    else:
+        humidity = 40.0 + (random.random() * 40)
+        
+    # Criar payload
+    payload = json.dumps({"humidity": humidity}).encode()
+    
+    # Processar como se fosse um evento MQTT
+    process_humidity_data(payload, current_time)
+    
+    # Atualizar status e timestamp
+    sensor_data["status"] = "online"
+    sensor_data["last_update"] = current_time
+    sensor_data["last_data_received"] = time.time()
+    
+    # Enviar dados via WebSocket
+    socketio.emit('data_update', sensor_data)
+    
+    return jsonify({"success": True, "temperature": temperature, "humidity": humidity})
+
+# Evento de conexão do WebSocket
+@socketio.on('connect')
+def handle_connect():
+    # Enviar dados atuais quando um cliente se conecta
+    socketio.emit('data_update', sensor_data)
 
 # Inicialização do cliente MQTT em uma thread separada
 def start_mqtt_client():
@@ -353,5 +450,5 @@ if __name__ == '__main__':
     status_thread.daemon = True
     status_thread.start()
     
-    # Iniciar aplicação Flask
-    app.run(debug=False, host='0.0.0.0', port=5000) 
+    # Iniciar aplicação Flask com SocketIO
+    socketio.run(app, debug=False, host='0.0.0.0', port=5000) 
